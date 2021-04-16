@@ -1,0 +1,1 @@
+A package to fit a collection of analytical functions to binned time series data. Specifically written to fit pulse models to GRB prompt emission lightcurve data. It is heavily influenced by the package PyGRB (https://github.com/JamesPaynter/PyGRB).
