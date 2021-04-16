@@ -6,9 +6,6 @@ import ultranest as un
 
 random.seed(42)
 
-# Prior = __import__("my_sum.py") # alternative to importing all of PF
-
-
 def test_Uniform():
     '''
     Test transformation between unit cube and uniform distribution
@@ -65,7 +62,7 @@ lc_fit.add_pulse_component('exp1',func)
 parvals = {'times': x, 'phys_par':3}
 param_names = ['phys_par']
 lc_fit.exp1.set_args(parvals)
-lc_fit.exp1.phys_par.prior = Prior('Uniform',{'lo':1,'hi':5})
+lc_fit.exp1.phys_par.set_prior(Prior('Uniform',{'lo':1,'hi':5}))
 
 def test_prior_transformation():
     '''
@@ -90,9 +87,7 @@ def test_sampling():
     sampler = un.ReactiveNestedSampler(param_names, lc_fit.log_likelihood, lc_fit.prior_transform, resume='overwrite',
                                         log_dir=f'chains/',num_test_samples=10,vectorized=False,draw_multiple=True)
 
-
     # results = sampler.run()
-
     # assert abs(results['posterior']['mean'][0]-2.735)<0.01
 
 # if __name__ == "__main__":
