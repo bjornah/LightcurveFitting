@@ -9,13 +9,13 @@ import re
 import ultranest as un
 
 # TO DO
-# add unit and integration tests
-# add to github
+#
 # add possibility to add custom function to instance of Prior class
-# document
+# document the code
+# Maybe add so that sampler is run from within the class, rather than outside. Makes it easier to guarantee that all properties exist and are up to date. Now e.g. indexdict is updated far too often during a fit.
 
 
-class Prior():
+class Prior_unit_cube():
     def __init__(self, name, prior_attributes={}):
 
         self.func = None
@@ -38,11 +38,18 @@ class Prior():
         '''
         Uniform sampling in a triangular space defined by vertices [(0,0), P1, P2]
         '''
-        r1,r2 = point
+        try:
+            r1,r2 = point
+        except:
+            try:
+                r1,r2 = point.T
+            except:
+                print(sys.exc_info())
+
         s = np.sqrt(r1)
-        x = self.P1[0] * (1.0 - r2) * s + self.P2[0] * r2 * s
-        y = self.P1[1] * (1.0 - r2) * s + self.P2[1] * r2 * s
-        return np.array([x, y])
+        x = self.P1[0]*(1.0 - r2)*s + self.P2[0]*r2*s
+        y = self.P1[1]*(1.0 - r2)*s + self.P2[1]*r2*s
+        return np.array([x, y]).T
 
     def initiate_prior(self):
 
@@ -57,16 +64,16 @@ class Prior():
 
     def evaluate(self,cube):
         '''Evaluate prior on the unit cube.'''
-        # for c in cube:
-            # assert (c<=1) and (c>=0), 'This is a prior transformation from the unit cube to the parameter space, please give only numbers in the range [0,1]'
         return self.func(cube)
 
 
 class Parameter():
-    def __init__(self, name):
+    def __init__(self, name, vectorised=False):
         self.name = name
+        self.vectorised = vectorised
         self.free = True
         self.value = None
+
 
     @property
     def prior(self):
@@ -78,7 +85,15 @@ class Parameter():
 
     @value.setter
     def value(self, value):
-        assert isinstance(value,(int,float)) or value==None, 'The value needs to be an int, float or None'
+        if self.vectorised:
+            if not isinstance(value,(np.ndarray)):
+                if value==None:
+                    pass
+                else:
+                    value = np.array([value])
+            # assert isinstance(value,(np.ndarray)) or value==None, 'The value needs to be an array'
+        else:
+            assert isinstance(value,(int,float)) or value==None, 'The value needs to be an int, float or None'
         self._value = value
 
     def set_prior(self,prior):
@@ -113,16 +128,18 @@ class data_in():
 
 
 class Pulse_shape():
-    def __init__(self, func):
+    def __init__(self, func, vectorised = False):
 
         self.func = func
         self.name = func.__name__
         self.args = inspect.getfullargspec(self.func).args
+        self.vectorised = vectorised
+
         for arg in self.args:
             if arg=='times':
                 setattr(self, arg, data_in(arg))
             else:
-                setattr(self, arg, Parameter(arg))
+                setattr(self, arg, Parameter(arg, vectorised = self.vectorised))
 
         self.parameters = {arg:self.__getattribute__(arg) for arg in self.args}
 
@@ -161,13 +178,14 @@ class LC_fit():
     '''
     Class to fit analytic functions to Fermi GRB light curves
     '''
-    def __init__(self, x, y, bkg=None, bkg_poly_order=1):
+    def __init__(self, x, y, bkg=None, bkg_poly_order=1, vectorised = False):
         self.x = x
         self.y = y
         self.pulse_component_name_list = []
         self.parameters = {}
         if not bkg is None:
             self.add_bkg(bkg, poly_order=bkg_poly_order)
+        self.vectorised = vectorised
 
     @property
     def free_parameters(self):
@@ -213,7 +231,7 @@ class LC_fit():
     def add_pulse_component(self, name, function, initial_par_dict = None):
         assert (name not in self.pulse_component_name_list), f'{name} is already added as a pulse component'
 
-        setattr(self, name, Pulse_shape(function))
+        setattr(self, name, Pulse_shape(function, vectorised = self.vectorised))
 
         self.pulse_component_name_list.append(name)
         self.parameters[name] = self.__getattribute__(name).parameters
@@ -221,69 +239,72 @@ class LC_fit():
 
     def prior_transform(self, cube):
         self._create_indexdict()
-        # params = cube.copy()
-        # i=0
-        # for component in self.pulse_component_name_list:
-        #     for parameter in self.parameters[component].values():
-        #         if parameter.free==True:
-        #             params[i] = parameter.prior(cube[i])
-        #             i+=1
-        # return params
         params = cube.copy()
+
         for prior in self.priors_list:
             indices = []
             for linked_parameter in prior.linked_parameters:
                 indices.append(self.indexdict[linked_parameter]) # self.indexlist contains a list that maps a specific parameter to an index that just enumerates parameters in order from first free parameter of first function to last free parameter of last function.
-            params[indices] = prior(cube[indices])
+            if self.vectorised:
+                params[:,indices] = prior(cube[:,indices])
 
-
-        # for component in self.pulse_component_name_list:
-        #     for parameter in self.parameters[component].values():
-        #         if parameter.free==True:
-        #             params[i] = parameter.prior(cube[i])
-        #             i+=1
+            else:
+                params[indices] = prior(cube[indices])
 
         return params
 
 
     def set_param_values(self, param_values):
         i = 0
+
         for name in self.pulse_component_name_list:
             free_parameters = self.__getattribute__(name).free_parameters
-            param_dict = {key:val for key,val in zip(free_parameters,param_values[i:i+len(free_parameters)])}
+            if self.vectorised:
+                param_dict = {key:val for key,val in zip(free_parameters,param_values[:,i:i+len(free_parameters)].T)}
+            else:
+                param_dict = {key:val for key,val in zip(free_parameters,param_values[i:i+len(free_parameters)])}
             i+=len(free_parameters)
             self.__getattribute__(name).set_args(param_dict)
 
-    def get_rates(self):
 
-        self.rates = np.zeros(len(self.x))
+    def get_rates(self,x):
+
+        self.rates = np.zeros(x.shape)
 
         for name in self.pulse_component_name_list:
-            self.rates+=self.__getattribute__(name).evaluate({'times':self.x})
+            self.rates+=self.__getattribute__(name).evaluate({'times':x})
 
         return self.rates
 
     def log_likelihood(self, param_values):
+        if self.vectorised:
+            x = np.array([self.x for i in range(param_values.shape[0])]).T
+            y = np.array([self.y for i in range(param_values.shape[0])]).T
 
-        # if param_values is not None:
-        self.set_param_values(param_values)
+        else:
+            x = self.x
+            y = self.y
 
-        total_rate = self.get_rates() + self.bkg_func(self.x)
+        if param_values is not None:
+            self.set_param_values(param_values)
+
+        total_rate = self.get_rates(x) + self.bkg_func(x)
 
         if np.any(total_rate == 0.):
             return -np.inf
         else:
-            return np.sum(-total_rate + self.y * np.log(total_rate) - scipy.special.gammaln(self.y + 1))
+            return np.sum(-total_rate + y * np.log(total_rate) - scipy.special.gammaln(y + 1),axis=0)
+
 
     def plot_corner(self, results, param_names, **kwargs):
         samples = np.array(results['weighted_samples']['points'])
         weights = np.array(results['weighted_samples']['weights'])
-        cumsumweights = np.cumsum(weights)
+        cumsum_weights = np.cumsum(weights)
 
-        mask = cumsumweights > 1e-4
+        mask = cumsum_weights > 1e-4
 
         if mask.sum() == 1:
-            print('Posterior is still concentrated in a single point:')
+            print('Posterior has a really poor spread. Something funny is going on.')
 
         fig = corner.corner(samples[mask,:], weights=weights[mask], show_titles=True, labels = param_names, **kwargs)
 
@@ -294,12 +315,11 @@ class LC_fit():
         if param_values:
             self.set_param_values(param_values)
 
-        rates = self.get_rates()
+        rates = self.get_rates(self.x)
 
         fig, ax = plt.subplots()
         ax.plot(self.x,self.y)
         ax.plot(self.x,self.rates+self.bkg)
-        # ax.plot(self.x,self.rates)
 
         return fig
 
