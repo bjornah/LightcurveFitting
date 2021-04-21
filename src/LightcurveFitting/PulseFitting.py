@@ -7,7 +7,7 @@ import corner
 import matplotlib.pyplot as plt
 import re
 import ultranest as un
-
+import chainconsumer as cc
 # TO DO
 #
 # add possibility to add custom function to instance of Prior class
@@ -73,7 +73,7 @@ class Parameter():
         self.vectorised = vectorised
         self.free = True
         self.value = None
-
+        self.owner_function = None
 
     @property
     def prior(self):
@@ -99,6 +99,10 @@ class Parameter():
     def set_prior(self,prior):
         self._prior = prior
         self._prior.linked_parameters.append(self)
+
+    # def set_owner_function(self,func):
+    #     self.owner_function = func
+
 
 class data_in():
     def __init__(self, name, value=None):
@@ -140,6 +144,7 @@ class Pulse_shape():
                 setattr(self, arg, data_in(arg))
             else:
                 setattr(self, arg, Parameter(arg, vectorised = self.vectorised))
+                self.__getattribute__(arg).owner_function = self
 
         self.parameters = {arg:self.__getattribute__(arg) for arg in self.args}
 
@@ -151,10 +156,9 @@ class Pulse_shape():
         self._parvals = {arg:self.__getattribute__(arg).value for arg in self.args}
         return self._parvals
 
-
     @property
     def free_parameters(self):
-        self._free_parameters = [self.__getattribute__(arg).name for arg in self.args if self.__getattribute__(arg).free == True]
+        self._free_parameters = [self.__getattribute__(arg).name for arg in self.args if ((self.__getattribute__(arg).free == True) and (self.__getattribute__(arg).owner_function == self))]
         return self._free_parameters
 
     @property
@@ -190,6 +194,7 @@ class LC_fit():
     @property
     def free_parameters(self):
         self._free_parameters = {arg:self.__getattribute__(arg).free_parameters for arg in self.pulse_component_name_list}
+        # free_param_list
         return self._free_parameters
 
     @property
@@ -310,9 +315,35 @@ class LC_fit():
 
         return fig
 
-    def plot_fit(self, param_values=None):
+    def plot_corner_cc(self, results, param_names, **kwargs):
 
-        if param_values:
+        samples = np.array(results['weighted_samples']['points'])
+        weights = np.array(results['weighted_samples']['weights'])
+        cumsum_weights = np.cumsum(weights)
+
+        mask = cumsum_weights > 1e-4
+
+        if mask.sum() == 1:
+            print('Posterior has a really poor spread. Something funny is going on.')
+
+        c = cc.ChainConsumer()
+        c.add_chain(samples[mask,:], weights=weights[mask], parameters=param_names)
+        c.configure(summary = True)
+
+        fig = c.plotter.plot(**kwargs)
+
+        # fig = corner.corner(samples[mask,:], weights=weights[mask], show_titles=True, labels = param_names, **kwargs)
+
+        return fig
+
+    def plot_fit(self, param_values=None, results=None):
+
+        if results is not None:
+            param_values = results['posterior']['mean']
+            if self.vectorised:
+                param_values = np.array([param_values])
+
+        if param_values is not None:
             self.set_param_values(param_values)
 
         rates = self.get_rates(self.x)
