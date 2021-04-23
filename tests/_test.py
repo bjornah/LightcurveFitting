@@ -22,14 +22,14 @@ def test_Gaussian():
     print('gaussian test')
     assert gauss.evaluate(0.5) == 0.0
 
-# def test_custom_prior():
-#     '''
-#     Test transformation between unit cube and custom distribution
-#     '''
-#     f = lambda x: x**2
-#     gauss = Prior_unit_cube('custom', {'mu':0,'sigma':10}, f)
-#     print('custom test')
-#     assert gauss.evaluate(0.5) == 0.0
+def test_custom_prior():
+    '''
+    Test transformation between unit cube and custom distribution
+    '''
+    f = lambda x, a, b: x**2 + a*x + b
+    prior = Prior_unit_cube('custom', {'a':1,'b':2}, f)
+    print('custom test')
+    assert prior.func(0.5) == 2.75
 
 def func(times, phys_par):
     '''
