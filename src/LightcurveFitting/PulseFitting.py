@@ -8,25 +8,29 @@ import matplotlib.pyplot as plt
 import re
 import ultranest as un
 import chainconsumer as cc
+
 # TO DO
 #
 # add possibility to add custom function to instance of Prior class
 # document the code
-# Maybe add so that sampler is run from within the class, rather than outside. Makes it easier to guarantee that all properties exist and are up to date. Now e.g. indexdict is updated far too often during a fit.
+# Maybe add so that sampler is run from within the class, rather than outside. Makes it easier to guarantee that all properties exist and are up to date. Currently, e.g. indexdict is updated far too often during a fit.
 
 
 class Prior_unit_cube():
-    def __init__(self, name, prior_attributes={}):
+    def __init__(self, name, prior_attributes={}, input_func=None):
 
-        self.func = None
         self.name = name
         self.linked_parameters = []
+        self.prior_attributes = prior_attributes
         for key in prior_attributes:
             setattr(self, key, prior_attributes[key])
-        self.initiate_prior()
+        self.initiate_prior(input_func)
 
     def __call__(self, cube):
         return self.evaluate(cube)
+
+    def custom_func(self,c):
+        return self.input_func(c,**self.prior_attributes)
 
     def Uniform_prior(self, c):
         return c * (self.hi - self.lo) + self.lo
@@ -51,15 +55,18 @@ class Prior_unit_cube():
         y = self.P1[1]*(1.0 - r2)*s + self.P2[1]*r2*s
         return np.array([x, y]).T
 
-    def initiate_prior(self):
+    def initiate_prior(self,input_func):
 
-        if self.name == 'Uniform':
+        if input_func is not None:
+            self.input_func = input_func
+            self.func = self.custom_func
+        elif self.name == 'Uniform':
             self.func = self.Uniform_prior
-        if self.name == 'Log_Uniform':
+        elif self.name == 'Log_Uniform':
             self.func = self.Log_Uniform_prior
-        if self.name == 'Triangle':
+        elif self.name == 'Triangle':
             self.func = self.Triangle_Prior
-        if self.name == 'Gaussian':
+        elif self.name == 'Gaussian':
             self.func = scipy.stats.norm(self.mu, self.sigma).ppf
 
     def evaluate(self,cube):
@@ -91,7 +98,6 @@ class Parameter():
                     pass
                 else:
                     value = np.array([value])
-            # assert isinstance(value,(np.ndarray)) or value==None, 'The value needs to be an array'
         else:
             assert isinstance(value,(int,float)) or value==None, 'The value needs to be an int, float or None'
         self._value = value
@@ -99,9 +105,6 @@ class Parameter():
     def set_prior(self,prior):
         self._prior = prior
         self._prior.linked_parameters.append(self)
-
-    # def set_owner_function(self,func):
-    #     self.owner_function = func
 
 
 class data_in():

@@ -10,7 +10,7 @@ def test_Uniform():
     '''
     Test transformation between unit cube and uniform distribution
     '''
-    uniform = Prior_unit_cube('Uniform',{'lo':0,'hi':10})
+    uniform = Prior_unit_cube('Uniform', {'lo':0,'hi':10})
     print('uniform test')
     assert uniform.evaluate(1) == 10
 
@@ -18,9 +18,18 @@ def test_Gaussian():
     '''
     Test transformation between unit cube and gaussian distribution
     '''
-    gauss = Prior_unit_cube('Gaussian',{'mu':0,'sigma':10})
+    gauss = Prior_unit_cube('Gaussian', {'mu':0,'sigma':10})
     print('gaussian test')
     assert gauss.evaluate(0.5) == 0.0
+
+# def test_custom_prior():
+#     '''
+#     Test transformation between unit cube and custom distribution
+#     '''
+#     f = lambda x: x**2
+#     gauss = Prior_unit_cube('custom', {'mu':0,'sigma':10}, f)
+#     print('custom test')
+#     assert gauss.evaluate(0.5) == 0.0
 
 def func(times, phys_par):
     '''
