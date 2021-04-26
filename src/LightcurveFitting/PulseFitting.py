@@ -8,12 +8,14 @@ import matplotlib.pyplot as plt
 import re
 import ultranest as un
 import chainconsumer as cc
+import os
 
 # TO DO
 # Improve the documentation
 # Add possibility of using non-nested sampling. This means including alternative
 # prior class and, log_likelihood function in LC_fit class.
 
+ROOT_DIR = os.path.dirname('/'.join(os.path.abspath(__file__).split('/')[:-2]))
 
 class Prior_unit_cube():
     """Class to that acts as prior for parameters in nested sampling.
