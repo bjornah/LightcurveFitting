@@ -42,7 +42,7 @@ setup(
     zip_safe=False,
     classifiers=[
         "Programming Language :: Python :: 3.7",
-        "License :: OSI Approved :: MIT License",
+        "License :: OSI Approved :: BSD 3-Clause License",
         "Operating System :: MacOS",
     ],
     python_requires='>=3.5',
